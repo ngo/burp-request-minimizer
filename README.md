@@ -13,3 +13,6 @@ This is a helper tool to perform HTTP request minimization, i.e. delete paramete
 
 After installation, a new option will be added to repeater's context menu, named "Minimize and send to repeater". Click that, wait and a new tab with minimized request will appear.
 
+# Demo
+
+![Demo](https://raw.githubusercontent.com/ngo/burp-request-minimizer/master/sample.gif)
