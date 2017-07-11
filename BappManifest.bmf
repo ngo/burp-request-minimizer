@@ -1,0 +1,12 @@
+Uuid: cc16f37549ff416b990d4312490f5fd1
+ExtensionType: 2
+Name: request-minimizer
+RepoName: request-minimizer
+ScreenVersion: 1.0
+SerialVersion: 1
+MinPlatformVersion: 0
+ProOnly: False
+Author: George Noseevich
+ShortDescription: Minimize requests by removing ad cookies, cachebusters, etc.
+EntryPoint: minimizer.py
+BuildCommand: 
