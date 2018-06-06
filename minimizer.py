@@ -1,4 +1,5 @@
 from burp import IBurpExtender, IContextMenuFactory, IContextMenuInvocation
+from burp import IParameter
 from javax.swing import JMenuItem
 from threading import Thread
 from functools import partial
@@ -50,11 +51,14 @@ class Minimizer(object):
             print("Request invariants", invariants)
             for param in request_info.getParameters():
                 print("Trying", param.getType(), param.getName(), param.getValue())
-                req = self._helpers.removeParameter(current_req, param)
-                resp = self._cb.makeHttpRequest(self._httpServ, req).getResponse()
-                if self.compare(etalon, resp, invariants):
-                    print("excluded:", param.getType(), param.getName(), param.getValue())
-                    current_req = self._fix_cookies(req)
+                if param.getType() in [IParameter.PARAM_URL, IParameter.PARAM_BODY and IParameter.PARAM_COOKIE]:
+                    req = self._helpers.removeParameter(current_req, param)
+                    resp = self._cb.makeHttpRequest(self._httpServ, req).getResponse()
+                    if self.compare(etalon, resp, invariants):
+                        print("excluded:", param.getType(), param.getName(), param.getValue())
+                        current_req = self._fix_cookies(req)
+                else:
+                    print("JSON and XML parameters are not currently supported")
             if replace:
                 self._request.setRequest(current_req)
             else:
