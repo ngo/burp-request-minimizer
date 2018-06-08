@@ -1,9 +1,14 @@
 from burp import IBurpExtender, IContextMenuFactory, IContextMenuInvocation
-from burp import IParameter
+from burp import IParameter, IRequestInfo
 from javax.swing import JMenuItem
+
+import array
+
 from threading import Thread
 from functools import partial
+import json
 import time
+import copy
 
 IGNORED_INVARIANTS = set(['last_modified_header'])
 
@@ -42,6 +47,7 @@ class Minimizer(object):
 
     def _minimize(self, replace):
         try:
+            seen_json = seen_xml = False
             request_info = self._helpers.analyzeRequest(self._request)
             current_req = self._request.getRequest()
             etalon = self._cb.makeHttpRequest(self._httpServ, current_req).getResponse()
@@ -50,15 +56,44 @@ class Minimizer(object):
             invariants -= IGNORED_INVARIANTS
             print("Request invariants", invariants)
             for param in request_info.getParameters():
-                print("Trying", param.getType(), param.getName(), param.getValue())
-                if param.getType() in [IParameter.PARAM_URL, IParameter.PARAM_BODY and IParameter.PARAM_COOKIE]:
+                param_type = param.getType()
+                if param_type in [IParameter.PARAM_URL, IParameter.PARAM_BODY and IParameter.PARAM_COOKIE]:
+                    print("Trying", param_type, param.getName(), param.getValue())
                     req = self._helpers.removeParameter(current_req, param)
                     resp = self._cb.makeHttpRequest(self._httpServ, req).getResponse()
                     if self.compare(etalon, resp, invariants):
                         print("excluded:", param.getType(), param.getName(), param.getValue())
                         current_req = self._fix_cookies(req)
                 else:
-                    print("JSON and XML parameters are not currently supported")
+                    if param_type == IParameter.PARAM_JSON:
+                        seen_json = True
+                    elif param_type == IParameter.PARAM_XML:
+                        seen_xml = True
+                    else:
+                        print("Unsupported type:", param.getType())
+            if request_info.getContentType() == IRequestInfo.CONTENT_TYPE_JSON or seen_json:
+                print('Minimizing json...')
+                body_offset = request_info.getBodyOffset()
+                headers = self._request.getRequest()[:body_offset].tostring()
+                body = self._request.getRequest()[body_offset:].tostring()
+                try:
+                    def check(body):
+                        body = json.dumps(body)
+                        req = fix_content_type(headers, body)
+                        resp = self._cb.makeHttpRequest(self._httpServ, req).getResponse()
+                        if self.compare(etalon, resp, invariants):
+                            print("Not changed: " + body)
+                            return True
+                        else:
+                            print("Changed: " + body)
+                            return False
+                    body = json.loads(body)
+                    body = bf_search(body, check)
+                    current_req = fix_content_type(headers, json.dumps(body))
+                except Exception as e:
+                    print(e)
+            if request_info.getContentType() == IRequestInfo.CONTENT_TYPE_XML or seen_xml:
+                    pass
             if replace:
                 self._request.setRequest(current_req)
             else:
@@ -71,6 +106,40 @@ class Minimizer(object):
                 )
         except Exception as e:
             print(e)
+
+def bf_search(body, check_func):
+    print('Starting to minimize', body)
+    if type(body) == dict:
+        to_test = body.items()
+        assemble = lambda l : dict(l)
+    elif type(body) == list:
+        to_test = zip(range(len(body)), body)
+        assemble = lambda l: list(zip(*sorted(l))[1] if len(l) else [])
+    #1. Test all sub-elements
+    tested = []
+    while len(to_test):
+        current = to_test.pop()
+        print('Trying to eliminate', current)
+        if not check_func(assemble(to_test+tested)):
+            tested.append(current)
+    #2. Recurse into remainig sub_items
+    to_test = tested
+    tested = []
+    while len(to_test):
+        key, value = to_test.pop()
+        if type(value) in [list, dict]:
+            def check_func_rec(body):
+                return check_func(assemble(to_test + tested + [(key, body)]))
+            value = bf_search(value, check_func_rec)
+        tested.append((key, value))
+    return assemble(tested)
+
+def fix_content_type(headers, body):
+    headers = headers.split('\r\n')
+    for i in range(len(headers)):
+        if headers[i].lower().startswith('content-length'):
+            headers[i] = 'Content-Length: ' + str(len(body))
+    return array.array('b', '\r\n'.join(headers) + body)
 
 class BurpExtender(IBurpExtender, IContextMenuFactory):
     def registerExtenderCallbacks(self, callbacks):
