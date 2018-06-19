@@ -6,6 +6,7 @@ This is a helper tool to perform HTTP request minimization, i.e. delete paramete
 1.	Download Burp Suite : http://portswigger.net/burp/download.html
 2.	Download Jython standalone JAR: http://www.jython.org/downloads.html
 3.	Open burp -> Extender -> Options -> Python Environment -> Select File -> Choose the Jython standalone JAR
+4.      Install packages from requirements.txt in jython's virtualenv that you use with burp using pip install -r requirements
 4.	Download the extension .py file.
 5.	Open Burp -> Extender -> Extensions -> Add -> Choose the file.
 
