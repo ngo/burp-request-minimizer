@@ -1,14 +1,19 @@
 from burp import IBurpExtender, IContextMenuFactory, IContextMenuInvocation
 from burp import IParameter, IRequestInfo
+from java.net import URL, URLClassLoader
+from java.lang import Thread as JavaThread
 from javax.swing import JMenuItem
-
 import array
+
+import xmltodict
 
 from threading import Thread
 from functools import partial
 import json
 import time
 import copy
+import os
+import traceback
 
 IGNORED_INVARIANTS = set(['last_modified_header'])
 
@@ -18,6 +23,10 @@ class Minimizer(object):
         self._helpers = callbacks.helpers
         self._request = request[0]
         self._httpServ = self._request.getHttpService()
+    
+    def _fix_classloader_problems(self):
+        classloader = URLClassLoader([URL("file://" + os.getcwd()+ "/xercesImpl-2.11.0.jar")], JavaThread.currentThread().getContextClassLoader())
+        JavaThread.currentThread().setContextClassLoader(classloader);
 
     def compare(self, etalon, response, etalon_invariant):
         invariant = set(self._helpers.analyzeResponseVariations([etalon, response]).getInvariantAttributes())
@@ -47,6 +56,7 @@ class Minimizer(object):
 
     def _minimize(self, replace):
         try:
+            self._fix_classloader_problems()
             seen_json = seen_xml = False
             request_info = self._helpers.analyzeRequest(self._request)
             current_req = self._request.getRequest()
@@ -71,29 +81,38 @@ class Minimizer(object):
                         seen_xml = True
                     else:
                         print("Unsupported type:", param.getType())
-            if request_info.getContentType() == IRequestInfo.CONTENT_TYPE_JSON or seen_json:
-                print('Minimizing json...')
+            seen_json = (request_info.getContentType() == IRequestInfo.CONTENT_TYPE_JSON or seen_json)
+            seen_xml = (request_info.getContentType() == IRequestInfo.CONTENT_TYPE_XML or seen_xml)
+            if seen_json or seen_xml:
                 body_offset = request_info.getBodyOffset()
                 headers = self._request.getRequest()[:body_offset].tostring()
                 body = self._request.getRequest()[body_offset:].tostring()
-                try:
-                    def check(body):
-                        body = json.dumps(body)
-                        req = fix_content_type(headers, body)
-                        resp = self._cb.makeHttpRequest(self._httpServ, req).getResponse()
-                        if self.compare(etalon, resp, invariants):
-                            print("Not changed: " + body)
-                            return True
-                        else:
-                            print("Changed: " + body)
-                            return False
-                    body = json.loads(body)
-                    body = bf_search(body, check)
-                    current_req = fix_content_type(headers, json.dumps(body))
-                except Exception as e:
-                    print(e)
-            if request_info.getContentType() == IRequestInfo.CONTENT_TYPE_XML or seen_xml:
-                    pass
+                if seen_json:
+                    print('Minimizing json...')
+                    dumpmethod = partial(json.dumps, indent=4)
+                    loadmethod = json.loads
+                elif seen_xml:
+                    print('Minimizing XML...')
+                    dumpmethod = partial(xmltodict.unparse, pretty=True)
+                    loadmethod = xmltodict.parse
+                # The minimization routine for both xml and json is the same,
+                # the only difference is with load and dump functions    
+                def check(body):
+                    if len(body) == 0 and not seen_json:
+                        # XML with and no root node is invalid
+                        return False
+                    body = str(dumpmethod(body))
+                    req = fix_content_type(headers, body)
+                    resp = self._cb.makeHttpRequest(self._httpServ, req).getResponse()
+                    if self.compare(etalon, resp, invariants):
+                        print("Not changed: " + body)
+                        return True
+                    else:
+                        print("Changed: " + body)
+                        return False
+                body = loadmethod(body)
+                body = bf_search(body, check)
+                current_req = fix_content_type(headers, str(dumpmethod(body)))
             if replace:
                 self._request.setRequest(current_req)
             else:
@@ -104,12 +123,12 @@ class Minimizer(object):
                         current_req,
                         "minimized"
                 )
-        except Exception as e:
-            print(e)
+        except:
+            print traceback.format_exc()
 
 def bf_search(body, check_func):
     print('Starting to minimize', body)
-    if type(body) == dict:
+    if isinstance(body, dict):
         to_test = body.items()
         assemble = lambda l : dict(l)
     elif type(body) == list:
@@ -127,7 +146,7 @@ def bf_search(body, check_func):
     tested = []
     while len(to_test):
         key, value = to_test.pop()
-        if type(value) in [list, dict]:
+        if isinstance(value,list) or isinstance(value, dict):
             def check_func_rec(body):
                 return check_func(assemble(to_test + tested + [(key, body)]))
             value = bf_search(value, check_func_rec)
