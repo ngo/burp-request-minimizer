@@ -2,8 +2,8 @@ Uuid: cc16f37549ff416b990d4312490f5fd1
 ExtensionType: 2
 Name: Request Minimizer
 RepoName: request-minimizer
-ScreenVersion: 1.1
-SerialVersion: 2
+ScreenVersion: 1.2
+SerialVersion: 3
 MinPlatformVersion: 0
 ProOnly: False
 Author: George Noseevich
