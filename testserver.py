@@ -3,7 +3,7 @@ import BaseHTTPServer
 import traceback
 import collections
 
-from xmltodict import xmltodict
+import xmltodict
 
 JSON_PATTERN = json.loads("""
 {
