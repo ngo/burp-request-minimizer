@@ -12,7 +12,7 @@ from functools import partial
 import json
 import time
 import copy
-import os
+import sys
 import traceback
 
 IGNORED_INVARIANTS = set(['last_modified_header'])
@@ -25,7 +25,14 @@ class Minimizer(object):
         self._httpServ = self._request.getHttpService()
     
     def _fix_classloader_problems(self):
-        classloader = URLClassLoader([URL("file://" + os.getcwd()+ "/xercesImpl-2.11.0.jar")], JavaThread.currentThread().getContextClassLoader())
+        # Get path to jython jar
+        jython_jar = None
+        for path in sys.path:
+            if '.jar' in path and 'jython' in path.lower():
+                jython_jar = path[:path.index('.jar')+4]
+        if jython_jar is None:
+            raise Exception("Could not locate jython jar in path!")
+        classloader = URLClassLoader([URL("file://" + jython_jar)], JavaThread.currentThread().getContextClassLoader())
         JavaThread.currentThread().setContextClassLoader(classloader);
 
     def compare(self, etalon, response, etalon_invariant):
