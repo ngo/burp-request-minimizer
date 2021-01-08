@@ -74,7 +74,7 @@ class Minimizer(object):
             print("Request invariants", invariants)
             for param in request_info.getParameters():
                 param_type = param.getType()
-                if param_type in [IParameter.PARAM_URL, IParameter.PARAM_BODY and IParameter.PARAM_COOKIE]:
+                if param_type in [IParameter.PARAM_URL, IParameter.PARAM_BODY, IParameter.PARAM_COOKIE]:
                     print("Trying", param_type, param.getName(), param.getValue())
                     req = self._helpers.removeParameter(current_req, param)
                     resp = self._cb.makeHttpRequest(self._httpServ, req).getResponse()
