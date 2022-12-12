@@ -60,6 +60,16 @@ class Minimizer(object):
             return self._helpers.buildHttpMessage(new_headers, current_req[cur_request_info.getBodyOffset():])
         return current_req
 
+    def removeHeader(self, req, target_header):
+        req_info = self._helpers.analyzeRequest(req)
+        new_headers = []
+        headers = req_info.getHeaders()
+        print("DEBUG: GetHeaders(): ", headers)
+        for header in headers:
+            if header != target_header :
+                print("DEBUG: Header, target_Header", header, target_header)
+                new_headers.append(header)
+        return self._helpers.buildHttpMessage(new_headers, req[req_info.getBodyOffset():])
 
     def _minimize(self, replace):
         try:
@@ -88,6 +98,16 @@ class Minimizer(object):
                         seen_xml = True
                     else:
                         print("Unsupported type:", param.getType())
+
+            # minimize headers
+            # do not remove GET/POST and Host header -> skip first 2 elements
+            for header in request_info.getHeaders()[2:]:
+                    req = self.removeHeader(current_req, header)
+                    resp = self._cb.makeHttpRequest(self._httpServ, req).getResponse()
+                    if self.compare(etalon, resp, invariants):
+                        print("excluded: Header ", header)
+                        current_req = self._fix_cookies(req)
+            
             seen_json = (request_info.getContentType() == IRequestInfo.CONTENT_TYPE_JSON or seen_json)
             seen_xml = (request_info.getContentType() == IRequestInfo.CONTENT_TYPE_XML or seen_xml)
             if seen_json or seen_xml:
