@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.3.2] - 2022-12-12
+### Changed
+ - Header minimization (see https://github.com/ngo/burp-request-minimizer/pull/9)
+
 ## [1.3.1] - 2021-08-01
 ### Fixed
  - POST parameters minimization (see https://github.com/ngo/burp-request-minimizer/issues/7)
